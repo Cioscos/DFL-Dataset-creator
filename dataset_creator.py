@@ -110,13 +110,13 @@ class YawPitchComparatorSubprocessor(Subprocessor):
     #override
     def process_info_generator(self):
         cpu_count = len(self.img_chunks_list)
-        print(f'Running on {cpu_count} threads')
+        print(f"Running on {cpu_count} {'threads' if cpu_count > 1 else 'thread'}")
         for i in range(cpu_count):
             yield 'CPU%d' % (i), {'i':i}, {}
 
     #override
     def on_clients_initialized(self):
-        io.progress_bar ("Sorting", self.total_iterations, mininterval=10)
+        io.progress_bar ("Calculating data", self.total_iterations, mininterval=10)
         io.progress_bar_inc(len(self.img_chunks_list))
 
     #override
@@ -156,12 +156,12 @@ def main():
     # Elaborate srcset
     cpus = cpu_number(len(srcset))
     with mp.Pool(processes=cpus) as p:
-        srcset = list(tqdm(p.imap_unordered(process_yaw_pitch_file, srcset),desc=f'Calculating data with {cpus} cpus', total=len(srcset), ascii=True))
+        srcset = list(tqdm(p.imap_unordered(process_yaw_pitch_file, srcset),desc=f"Calculating data with {cpus} {'cpus' if cpus > 1 else 'cpu'}", total=len(srcset), ascii=True))
 
     # Elaborate dstset
     cpus = cpu_number(len(dstset))
     with mp.Pool(processes=cpus) as p:
-        dstset = list(tqdm(p.imap_unordered(process_yaw_pitch_file, dstset),desc=f'Calculating data with {cpus} cpus', total=len(dstset), ascii=True))
+        dstset = list(tqdm(p.imap_unordered(process_yaw_pitch_file, dstset),desc=f"Calculating data with {cpus} {'cpus' if cpus > 1 else 'cpu'}", total=len(dstset), ascii=True))
 
     dataset = YawPitchComparatorSubprocessor(srcset, dstset).run()
 

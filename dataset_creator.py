@@ -5,7 +5,6 @@ import argparse
 import math
 import multiprocessing as mp
 from tqdm import tqdm
-import numpy as np
 
 from xlib.DFLIMG.DFLJPG import DFLJPG
 from xlib.facelib import LandmarksProcessor
@@ -88,10 +87,10 @@ class YawPitchComparatorSubprocessor(joblib.Subprocessor):
 
         if sliced_count != 0:
             # SRC
-            src_chunks_list = np.array_split(self.src_list, sliced_count)
+            src_chunks_list = [self.src_list[sliced_count*i:sliced_count*(i+1)] for i in range(self.src_list_len/sliced_count + 1)]
 
             # DST
-            dst_chunks_list = np.array_split(self.dst_list, sliced_count)
+            dst_chunks_list = [self.dst_list[sliced_count*i:sliced_count*(i+1)] for i in range(self.dst_list_len/sliced_count + 1)]
 
             for src_chunk, dst_chunk in zip(src_chunks_list, dst_chunks_list):
                 self.img_chunks_list.append( [src_chunk, dst_chunk] )

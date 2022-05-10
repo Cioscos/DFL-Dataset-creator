@@ -85,22 +85,12 @@ class YawPitchComparatorSubprocessor(joblib.Subprocessor):
 
         self.img_chunks_list = []
 
-        if sliced_count != 0:
-            # SRC
-            src_chunks_list = [self.src_list[sliced_count*i:sliced_count*(i+1)] for i in range(self.src_list_len/sliced_count + 1)]
+        # SRC
+        src_chunks_list = [ self.src_list[i*slice_count : (i+1)*slice_count] for i in range(sliced_count) ] + \
+                            [ self.src_list[sliced_count*slice_count:] ]
 
-            # DST
-            dst_chunks_list = [self.dst_list[sliced_count*i:sliced_count*(i+1)] for i in range(self.dst_list_len/sliced_count + 1)]
-
-            for src_chunk, dst_chunk in zip(src_chunks_list, dst_chunks_list):
-                self.img_chunks_list.append( [src_chunk, dst_chunk] )
-
-        else:
-            self.img_chunks_list.append( [self.src_list, self.dst_list] )
-
-        self.total_iterations = 0
-        for img_chunk in self.img_chunks_list:
-            self.total_iterations += len(img_chunk[0]) * len(img_chunk[1])
+        for chunk in src_chunks_list:
+            self.img_chunks_list.append( [chunk, self.dst_list] )
 
         self.result = []
         super().__init__('YawPitchComparator', YawPitchComparatorSubprocessor.Cli, 0)
@@ -114,7 +104,7 @@ class YawPitchComparatorSubprocessor(joblib.Subprocessor):
 
     #override
     def on_clients_initialized(self):
-        io.progress_bar ("Calculating data", self.total_iterations, mininterval=10)
+        io.progress_bar ("Calculating data", self.src_list_len*self.dst_list_len, mininterval=10)
         io.progress_bar_inc(len(self.img_chunks_list))
 
     #override

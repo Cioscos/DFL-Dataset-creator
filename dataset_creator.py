@@ -72,7 +72,7 @@ class YawPitchComparatorSubprocessor(joblib.Subprocessor):
                     if math.isclose(self._round_up(srcimg[1].yaw, 2), self._round_up(dstimg[1].yaw, 2), abs_tol=self.angle_match) and \
                     math.isclose(self._round_up(srcimg[1].pitch, 2), self._round_up(dstimg[1].pitch, 2), abs_tol=self.angle_match):
                         img_list.append(srcimg[0])
-                    self.progress_bar_inc(1)
+                self.progress_bar_inc(len(data[1]))
 
             return img_list
 
@@ -81,17 +81,18 @@ class YawPitchComparatorSubprocessor(joblib.Subprocessor):
             return "Bunch of images"
 
     #override
-    def __init__(self, src_list, dst_list, angle_match=0.05):
+    def __init__(self, src_list, dst_list, angle_match=0.05, cpus=mp.cpu_count()):
         self.src_list = src_list
         self.dst_list = dst_list
         self.src_list_len = len(self.src_list)
         self.dst_list_len = len(self.dst_list)
         self.angle_match = angle_match
+        self.cpus = cpus
 
-        slice_count = 2000
+        slice_count = self.src_list_len // cpus
         sliced_count = self.src_list_len // slice_count
 
-        if sliced_count > 12:
+        if sliced_count > cpus:
             sliced_count = 11.9
             slice_count = int(self.src_list_len / sliced_count)
             sliced_count = self.src_list_len // slice_count
@@ -117,7 +118,7 @@ class YawPitchComparatorSubprocessor(joblib.Subprocessor):
 
     #override
     def on_clients_initialized(self):
-        io.progress_bar ("Calculating data", self.src_list_len*self.dst_list_len, mininterval=10)
+        io.progress_bar ("Calculating data", self.src_list_len*self.dst_list_len)
         io.progress_bar_inc(len(self.img_chunks_list))
 
     #override
@@ -155,17 +156,20 @@ def main():
     srcset = make_dataset(args.src)
     dstset = make_dataset(args.dst)
 
+    cpus = io.input_int('Insert number of CPUs to use',
+                    help_message='If the default option is selected it will use all cpu cores and it will slow down pc',
+                    default_value=mp.cpu_count())
     # Elaborate srcset
-    cpus = cpu_number(len(srcset))
     with mp.Pool(processes=cpus) as p:
         final_srcset = list(tqdm(p.imap_unordered(process_yaw_pitch_file, srcset),desc=f"Calculating data with {cpus} {'cpus' if cpus > 1 else 'cpu'}", total=len(srcset), ascii=True))
 
     # Elaborate dstset
-    cpus = cpu_number(len(dstset))
     with mp.Pool(processes=cpus) as p:
         final_dstset = list(tqdm(p.imap_unordered(process_yaw_pitch_file, dstset),desc=f"Calculating data with {cpus} {'cpus' if cpus > 1 else 'cpu'}", total=len(dstset), ascii=True))
 
-    dataset = YawPitchComparatorSubprocessor(final_srcset, final_dstset, angle_match=args.angle_match).run()
+    print('start')
+    dataset = YawPitchComparatorSubprocessor(final_srcset, final_dstset, angle_match=args.angle_match, cpus=cpus).run()
+    print('finish')
 
     # remove duplicates
     dataset = set(dataset)

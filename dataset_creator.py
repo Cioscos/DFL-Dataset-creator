@@ -167,9 +167,7 @@ def main():
     with mp.Pool(processes=cpus) as p:
         final_dstset = list(tqdm(p.imap_unordered(process_yaw_pitch_file, dstset),desc=f"Calculating data with {cpus} {'cpus' if cpus > 1 else 'cpu'}", total=len(dstset), ascii=True))
 
-    print('start')
     dataset = YawPitchComparatorSubprocessor(final_srcset, final_dstset, angle_match=args.angle_match, cpus=cpus).run()
-    print('finish')
 
     # remove duplicates
     dataset = set(dataset)

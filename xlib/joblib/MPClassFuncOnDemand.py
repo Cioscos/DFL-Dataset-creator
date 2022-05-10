@@ -1,5 +1,6 @@
 import multiprocessing
-from interact import interact as io
+
+from ..interact import interact as io
 
 class MPClassFuncOnDemand():
     def __init__(self, class_handle, class_func_name, **class_kwargs):

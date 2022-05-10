@@ -2,7 +2,8 @@ import traceback
 import multiprocessing
 import time
 import sys
-from interact import interact as io
+
+from ..interact import interact as io
 
 
 class Subprocessor(object):

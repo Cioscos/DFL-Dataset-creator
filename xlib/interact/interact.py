@@ -21,7 +21,7 @@ except:
 
 yn_str = {True:'y',False:'n'}
 
-class InteractBase(object):
+class InteractBase():
     EVENT_LBUTTONDOWN = 1
     EVENT_LBUTTONUP = 2
     EVENT_MBUTTONDOWN = 3

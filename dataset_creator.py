@@ -1,5 +1,4 @@
 from pathlib import Path
-import re
 import os
 import shutil
 import argparse
@@ -8,10 +7,10 @@ import multiprocessing as mp
 from tqdm import tqdm
 import numpy as np
 
-from DFLIMG.DFLJPG import DFLJPG
-from facelib import LandmarksProcessor
-from joblib import Subprocessor
-from interact import interact as io
+from xlib.DFLIMG.DFLJPG import DFLJPG
+from xlib.facelib import LandmarksProcessor
+from xlib import joblib
+from xlib.interact import interact as io
 
 class DataImage:
     def __init__(self, yaw, pitch) -> None:
@@ -48,8 +47,8 @@ def cpu_number(list_size, slice_count=2000):
 
     return sliced_count if sliced_count != 0 else 1
 
-class YawPitchComparatorSubprocessor(Subprocessor):
-    class Cli(Subprocessor.Cli):
+class YawPitchComparatorSubprocessor(joblib.Subprocessor):
+    class Cli(joblib.Subprocessor.Cli):
         def _round_up(self, n, decimals=0):
             multiplier = 10 ** decimals
             return math.ceil(n * multiplier) / multiplier

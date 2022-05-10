@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import numpy.linalg as npla
 
-import mathlib
+from xlib import mathlib
 
 # 68 point landmark definitions
 landmarks_68_pt = { "mouth": (48,68),

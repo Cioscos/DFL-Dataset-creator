@@ -11,6 +11,13 @@ from xlib.facelib import LandmarksProcessor
 from xlib import joblib
 from xlib.interact import interact as io
 
+IMG_EXTENSIONS = [
+    '.jpg', '.JPG', '.jpeg', '.JPEG'
+]
+
+def is_image_file(filename):
+    return any(filename.endswith(extension) for extension in IMG_EXTENSIONS)
+
 class DataImage:
     def __init__(self, yaw, pitch) -> None:
         self.yaw = yaw
@@ -22,8 +29,9 @@ def make_dataset(dir: str) -> list[Path]:
 
     for root, _, fnames in os.walk(dir):
         for fname in fnames:
-            path = os.path.join(root, fname)
-            files.append(Path(path))
+            if is_image_file(fname):
+                path = os.path.join(root, fname)
+                files.append(Path(path))
 
     return files
 
@@ -53,12 +61,16 @@ class YawPitchComparatorSubprocessor(joblib.Subprocessor):
             return math.ceil(n * multiplier) / multiplier
 
         #override
+        def on_initialize(self, client_dict):
+            self.angle_match = client_dict['angle_match']
+
+        #override
         def process_data(self, data):
             img_list = []
             for srcimg in data[0]:
                 for dstimg in data[1]:
-                    if math.isclose(self._round_up(srcimg[1].yaw, 2), self._round_up(dstimg[1].yaw, 2), abs_tol=0.05) and \
-                    math.isclose(self._round_up(srcimg[1].pitch, 2), self._round_up(dstimg[1].pitch, 2), abs_tol=0.05):
+                    if math.isclose(self._round_up(srcimg[1].yaw, 2), self._round_up(dstimg[1].yaw, 2), abs_tol=self.angle_match) and \
+                    math.isclose(self._round_up(srcimg[1].pitch, 2), self._round_up(dstimg[1].pitch, 2), abs_tol=self.angle_match):
                         img_list.append(srcimg[0])
                     self.progress_bar_inc(1)
 
@@ -69,11 +81,12 @@ class YawPitchComparatorSubprocessor(joblib.Subprocessor):
             return "Bunch of images"
 
     #override
-    def __init__(self, src_list, dst_list):
+    def __init__(self, src_list, dst_list, angle_match=0.05):
         self.src_list = src_list
         self.dst_list = dst_list
         self.src_list_len = len(self.src_list)
         self.dst_list_len = len(self.dst_list)
+        self.angle_match = angle_match
 
         slice_count = 2000
         sliced_count = self.src_list_len // slice_count
@@ -100,7 +113,7 @@ class YawPitchComparatorSubprocessor(joblib.Subprocessor):
         cpu_count = len(self.img_chunks_list)
         print(f"Running on {cpu_count} {'threads' if cpu_count > 1 else 'thread'}")
         for i in range(cpu_count):
-            yield 'CPU%d' % (i), {'i':i}, {}
+            yield 'CPU%d' % (i), {'i':i}, {'angle_match':self.angle_match}
 
     #override
     def on_clients_initialized(self):
@@ -136,6 +149,7 @@ def main():
     parser.add_argument('-s', '--src', type=str, dest='src', required=True, help='Folder with source aligned images')
     parser.add_argument('-d', '--dst', type=str, dest='dst', required=True, help='Folder with dstination aligned images')
     parser.add_argument('-o', '--output', type=str, dest='output', default='Dataset', help='Folder with final dataset')
+    parser.add_argument('-a', '--angle-match', type=float, dest='angle_match', default=0.05, help='Indicates the minimum value difference required for two values to be equal.')
     args = parser.parse_args()
 
     srcset = make_dataset(args.src)
@@ -144,14 +158,14 @@ def main():
     # Elaborate srcset
     cpus = cpu_number(len(srcset))
     with mp.Pool(processes=cpus) as p:
-        srcset = list(tqdm(p.imap_unordered(process_yaw_pitch_file, srcset),desc=f"Calculating data with {cpus} {'cpus' if cpus > 1 else 'cpu'}", total=len(srcset), ascii=True))
+        final_srcset = list(tqdm(p.imap_unordered(process_yaw_pitch_file, srcset),desc=f"Calculating data with {cpus} {'cpus' if cpus > 1 else 'cpu'}", total=len(srcset), ascii=True))
 
     # Elaborate dstset
     cpus = cpu_number(len(dstset))
     with mp.Pool(processes=cpus) as p:
-        dstset = list(tqdm(p.imap_unordered(process_yaw_pitch_file, dstset),desc=f"Calculating data with {cpus} {'cpus' if cpus > 1 else 'cpu'}", total=len(dstset), ascii=True))
+        final_dstset = list(tqdm(p.imap_unordered(process_yaw_pitch_file, dstset),desc=f"Calculating data with {cpus} {'cpus' if cpus > 1 else 'cpu'}", total=len(dstset), ascii=True))
 
-    dataset = YawPitchComparatorSubprocessor(srcset, dstset).run()
+    dataset = YawPitchComparatorSubprocessor(final_srcset, final_dstset, angle_match=args.angle_match).run()
 
     # remove duplicates
     dataset = set(dataset)

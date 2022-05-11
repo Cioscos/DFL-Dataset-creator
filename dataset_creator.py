@@ -147,7 +147,7 @@ def main():
     # menage input arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('-s', '--src', type=str, dest='src', required=True, help='Folder with source aligned images')
-    parser.add_argument('-d', '--dst', type=str, dest='dst', required=True, help='Folder with dstination aligned images')
+    parser.add_argument('-d', '--dst', type=str, dest='dst', required=True, help='Folder with destination aligned images')
     parser.add_argument('-o', '--output', type=str, dest='output', default='Dataset', help='Folder with final dataset')
     parser.add_argument('-a', '--angle-match', type=float, dest='angle_match', default=0.05, help='Indicates the minimum value difference required for two values to be equal.')
     parser.add_argument('--cpus', type=int, dest='cpus', default=None, help='Number of cpus to use')

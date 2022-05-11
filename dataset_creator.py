@@ -62,7 +62,8 @@ class YawPitchComparatorSubprocessor(joblib.Subprocessor):
                     if math.isclose(self._round_up(srcimg[1].yaw, 2), self._round_up(dstimg[1].yaw, 2), abs_tol=self.angle_match) and \
                     math.isclose(self._round_up(srcimg[1].pitch, 2), self._round_up(dstimg[1].pitch, 2), abs_tol=self.angle_match):
                         img_list.append(srcimg[0])
-                self.progress_bar_inc(len(data[1]))
+                        break
+                self.progress_bar_inc(1)
 
             return img_list
 
@@ -75,7 +76,6 @@ class YawPitchComparatorSubprocessor(joblib.Subprocessor):
         self.src_list = src_list
         self.dst_list = dst_list
         self.src_list_len = len(self.src_list)
-        self.dst_list_len = len(self.dst_list)
         self.angle_match = angle_match
         self.cpus = cpus
 
@@ -116,7 +116,7 @@ class YawPitchComparatorSubprocessor(joblib.Subprocessor):
 
     #override
     def on_clients_initialized(self):
-        io.progress_bar ("Calculating data", self.src_list_len*self.dst_list_len)
+        io.progress_bar ("Calculating data", self.src_list_len)
         io.progress_bar_inc(len(self.img_chunks_list))
 
     #override

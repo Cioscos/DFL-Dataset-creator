@@ -23,7 +23,7 @@ class DataImage:
         self.yaw = yaw
         self.pitch = pitch
 
-def make_dataset(dir: str) -> list[Path]:
+def make_dataset(dir: str):
     files = []
     assert os.path.isdir(dir), '%s is not a valid directory' % dir
 

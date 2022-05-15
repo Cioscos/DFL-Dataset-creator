@@ -130,3 +130,4 @@ Dataset/
 dst_aligned/
 src_aligned/
 new_src/
+*.bat

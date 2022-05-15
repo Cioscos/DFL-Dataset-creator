@@ -62,7 +62,7 @@ class YawPitchComparatorSubprocessor(joblib.Subprocessor):
         def process_data(self, data):
             img_list = []
 
-            n = len(data)
+            n = len(data[0])
             for i in range(n):
                 yaw_src = data[0][i]
                 if yaw_src is not None:
@@ -153,7 +153,7 @@ class YawPitchComparatorSubprocessor(joblib.Subprocessor):
     #override
     def process_info_generator(self):
         cpu_count = len(self.img_chunks_list)
-        print(f"Running on {cpu_count} {'threads' if cpu_count > 1 else 'thread'}")
+        print(f"Matching images on {cpu_count} {'threads' if cpu_count > 1 else 'thread'}")
         for i in range(cpu_count):
             yield 'CPU%d' % (i), {'i':i}, {'angle_match':self.angle_match}
 

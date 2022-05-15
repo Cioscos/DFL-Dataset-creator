@@ -1,15 +1,20 @@
 from pathlib import Path
 import os
+import operator
 import shutil
 import argparse
 import math
 import multiprocessing as mp
+from tkinter import N
+
+import numpy as np
 from tqdm import tqdm
 
 from xlib.DFLIMG.DFLJPG import DFLJPG
 from xlib.facelib import LandmarksProcessor
 from xlib import joblib
 from xlib.interact import interact as io
+np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning) 
 
 IMG_EXTENSIONS = [
     '.jpg', '.JPG', '.jpeg', '.JPEG'
@@ -42,7 +47,7 @@ def process_yaw_pitch_file(name):
         print(f"{path.name} is not a DFL image file. Skipping it...")
         return
     pitch, yaw, _ = LandmarksProcessor.estimate_pitch_yaw_roll ( dflimg.get_landmarks(), size=dflimg.get_shape()[1] )
-    return [path, DataImage(yaw, pitch)]
+    return [path, yaw, pitch]
 
 class YawPitchComparatorSubprocessor(joblib.Subprocessor):
     class Cli(joblib.Subprocessor.Cli):
@@ -57,13 +62,18 @@ class YawPitchComparatorSubprocessor(joblib.Subprocessor):
         #override
         def process_data(self, data):
             img_list = []
-            for srcimg in data[0]:
-                for dstimg in data[1]:
-                    if math.isclose(self._round_up(srcimg[1].yaw, 2), self._round_up(dstimg[1].yaw, 2), abs_tol=self.angle_match) and \
-                    math.isclose(self._round_up(srcimg[1].pitch, 2), self._round_up(dstimg[1].pitch, 2), abs_tol=self.angle_match):
-                        img_list.append(srcimg[0])
-                        break
-                self.progress_bar_inc(1)
+
+            n = len(data)
+            for i in range(n):
+                yaw_src = data[0][i]
+                if yaw_src is not None:
+                    yaw_dst = data[1][i]
+                    if yaw_dst is not None:
+                        for srcimg in yaw_src:
+                            for dstimg in yaw_dst:
+                                if math.isclose(self._round_up(srcimg[2], 2), self._round_up(dstimg[2], 2), abs_tol=self.angle_match):
+                                    img_list.append(srcimg[0])
+                                    break
 
             return img_list
 
@@ -82,29 +92,63 @@ class YawPitchComparatorSubprocessor(joblib.Subprocessor):
         slice_count = self.src_list_len // cpus
         sliced_count = 1 if slice_count == 0 else self.src_list_len // slice_count
 
-        if sliced_count > cpus:
-            sliced_count = 11.9
-            slice_count = int(self.src_list_len / sliced_count)
-            sliced_count = self.src_list_len // slice_count
+        if sliced_count > cpus: sliced_count = cpus
 
         self.img_chunks_list = []
 
+        grads = 128
+        grads_space = np.linspace(-1.2, 1.2, grads)
+        yaws_sample_list_src = [None]*grads
+
+        for g in io.progress_bar_generator ( range(grads), "Chunking src"):
+            yaw = grads_space[g]
+            next_yaw = grads_space[g+1] if g < grads-1 else yaw
+
+            yaw_samples = []
+            for img in self.src_list:
+                s_yaw = -img[1]
+                if (g == 0          and s_yaw < next_yaw) or \
+                    (g < grads-1     and s_yaw >= yaw and s_yaw < next_yaw) or \
+                    (g == grads-1    and s_yaw >= yaw):
+                    yaw_samples += [ img ]
+            if len(yaw_samples) > 0:
+                yaws_sample_list_src[g] = yaw_samples
+
+        yaws_sample_list_dst = [None]*grads
+        for g in io.progress_bar_generator ( range(grads), "Chunking dst"):
+            yaw = grads_space[g]
+            next_yaw = grads_space[g+1] if g < grads-1 else yaw
+
+            yaw_samples = []
+            for img in self.dst_list:
+                s_yaw = -img[1]
+                if (g == 0          and s_yaw < next_yaw) or \
+                    (g < grads-1     and s_yaw >= yaw and s_yaw < next_yaw) or \
+                    (g == grads-1    and s_yaw >= yaw):
+                    yaw_samples += [ img ]
+            if len(yaw_samples) > 0:
+                yaws_sample_list_dst[g] = yaw_samples
+
         # SRC
-        if slice_count > 1:
-            src_chunks_list = [ self.src_list[i*slice_count : (i+1)*slice_count] for i in range(sliced_count) ] + \
-                                [ self.src_list[sliced_count*slice_count:] ]
-            
-            if len(src_chunks_list) > cpus:
-                src_chunks_list[-2].extend(src_chunks_list[-1].copy())
-                src_chunks_list.pop()
+        if sliced_count > 1:
+
+            src_chunks_list = np.array_split(yaws_sample_list_src, sliced_count)
+            src_chunks_list = [list(x) for x in src_chunks_list]
+
+            dst_chunks_list = np.array_split(yaws_sample_list_dst, sliced_count)
+            dst_chunks_list = [list(x) for x in dst_chunks_list]
+
+            for src_chunk, dst_chunk in zip(src_chunks_list, dst_chunks_list):
+                self.img_chunks_list.append( [src_chunk, dst_chunk] )
 
         else:
-            src_chunks_list = self.src_list
+            src_chunks_list = yaws_sample_list_src
+            dst_chunks_list = yaws_sample_list_dst
 
-        for chunk in src_chunks_list:
-            self.img_chunks_list.append( [chunk, self.dst_list] )
+            self.img_chunks_list.append( [src_chunks_list, dst_chunks_list] )
 
         self.result = []
+        io.log_info("Calculating images match...")
         super().__init__('YawPitchComparator', YawPitchComparatorSubprocessor.Cli, 0)
 
     #override
@@ -113,15 +157,6 @@ class YawPitchComparatorSubprocessor(joblib.Subprocessor):
         print(f"Running on {cpu_count} {'threads' if cpu_count > 1 else 'thread'}")
         for i in range(cpu_count):
             yield 'CPU%d' % (i), {'i':i}, {'angle_match':self.angle_match}
-
-    #override
-    def on_clients_initialized(self):
-        io.progress_bar ("Calculating data", self.src_list_len)
-        io.progress_bar_inc(len(self.img_chunks_list))
-
-    #override
-    def on_clients_finalized(self):
-        io.progress_bar_close()
 
     #override
     def get_data(self, host_dict):
@@ -168,10 +203,14 @@ def main():
     # Elaborate srcset
     with mp.Pool(processes=cpus) as p:
         final_srcset = list(tqdm(p.imap_unordered(process_yaw_pitch_file, srcset),desc=f"Calculating datasrc with {cpus} {'cpus' if cpus > 1 else 'cpu'}", total=len(srcset), ascii=True))
+    io.log_info('Sorting...')
+    final_srcset = sorted(final_srcset, key=operator.itemgetter(1), reverse=True)
 
     # Elaborate dstset
     with mp.Pool(processes=cpus) as p:
         final_dstset = list(tqdm(p.imap_unordered(process_yaw_pitch_file, dstset),desc=f"Calculating datadst with {cpus} {'cpus' if cpus > 1 else 'cpu'}", total=len(dstset), ascii=True))
+    io.log_info('Sorting...')
+    final_dstset = sorted(final_dstset, key=operator.itemgetter(1), reverse=True)
 
     # Subprocessor returns a list of image to move in the final dataset
     dataset = YawPitchComparatorSubprocessor(final_srcset, final_dstset, angle_match=args.angle_match, cpus=cpus).run()

@@ -5,7 +5,6 @@ import shutil
 import argparse
 import math
 import multiprocessing as mp
-from tkinter import N
 
 import numpy as np
 from tqdm import tqdm

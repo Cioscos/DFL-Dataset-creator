@@ -202,14 +202,13 @@ def main():
     # Elaborate srcset
     with mp.Pool(processes=cpus) as p:
         final_srcset = list(tqdm(p.imap_unordered(process_yaw_pitch_file, srcset),desc=f"Calculating datasrc with {cpus} {'cpus' if cpus > 1 else 'cpu'}", total=len(srcset), ascii=True))
-    io.log_info('Sorting...')
-    final_srcset = sorted(final_srcset, key=operator.itemgetter(1), reverse=True)
+        io.log_info('Sorting...')
+        final_srcset = sorted(final_srcset, key=operator.itemgetter(1), reverse=True)
 
-    # Elaborate dstset
-    with mp.Pool(processes=cpus) as p:
+        # Elaborate dstset
         final_dstset = list(tqdm(p.imap_unordered(process_yaw_pitch_file, dstset),desc=f"Calculating datadst with {cpus} {'cpus' if cpus > 1 else 'cpu'}", total=len(dstset), ascii=True))
-    io.log_info('Sorting...')
-    final_dstset = sorted(final_dstset, key=operator.itemgetter(1), reverse=True)
+        io.log_info('Sorting...')
+        final_dstset = sorted(final_dstset, key=operator.itemgetter(1), reverse=True)
 
     # Subprocessor returns a list of image to move in the final dataset
     dataset = YawPitchComparatorSubprocessor(final_srcset, final_dstset, angle_match=args.angle_match, cpus=cpus).run()

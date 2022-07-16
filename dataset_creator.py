@@ -44,7 +44,7 @@ def process_yaw_pitch_file(name):
     dflimg = DFLJPG.load(path)
     if dflimg is None or not dflimg.has_data():
         print(f"{path.name} is not a DFL image file. Skipping it...")
-        return
+        return []
     pitch, yaw, _ = LandmarksProcessor.estimate_pitch_yaw_roll ( dflimg.get_landmarks(), size=dflimg.get_shape()[1] )
     return [path, yaw, pitch]
 
@@ -202,11 +202,13 @@ def main():
     # Elaborate srcset
     with mp.Pool(processes=cpus) as p:
         final_srcset = list(tqdm(p.imap_unordered(process_yaw_pitch_file, srcset),desc=f"Calculating datasrc with {cpus} {'cpus' if cpus > 1 else 'cpu'}", total=len(srcset), ascii=True))
+        final_srcset = [x for x in final_srcset if x]
         io.log_info('Sorting...')
         final_srcset = sorted(final_srcset, key=operator.itemgetter(1), reverse=True)
 
         # Elaborate dstset
         final_dstset = list(tqdm(p.imap_unordered(process_yaw_pitch_file, dstset),desc=f"Calculating datadst with {cpus} {'cpus' if cpus > 1 else 'cpu'}", total=len(dstset), ascii=True))
+        final_dstset = [x for x in final_srcset if x]
         io.log_info('Sorting...')
         final_dstset = sorted(final_dstset, key=operator.itemgetter(1), reverse=True)
 
@@ -218,7 +220,7 @@ def main():
 
     os.makedirs(args.output, exist_ok=True)
 
-    for path in tqdm(dataset, desc='Moving files', ascii=True):
+    for path in tqdm(dataset, desc='Copying files', ascii=True):
         shutil.copy(path, args.output)
 
 if __name__ == "__main__":
